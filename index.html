@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CFB Weekly Pick'em</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; background: #f4f4f9; color: #333; }
+    .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 1.5rem; }
+    h1, h2 { color: #1e3a8a; margin-top: 0; }
+    input, select, button { display: block; width: 100%; padding: 0.75rem; margin-top: 0.5rem; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    button { background: #1e3a8a; color: white; font-weight: bold; border: none; cursor: pointer; margin-top: 1rem; }
+    button:hover { background: #1d4ed8; }
+    .nav-tabs { display: flex; gap: 1rem; margin-bottom: 1rem; }
+    .nav-tabs button { flex: 1; margin-top: 0; background: #cbd5e1; color: #334155; }
+    .nav-tabs button.active { background: #1e3a8a; color: white; }
+    .game-card { border: 1px solid #e2e8f0; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+    .team-options { display: flex; gap: 1rem; margin-top: 0.5rem; }
+    .team-btn { flex: 1; padding: 0.75rem; text-align: center; border: 2px solid #cbd5e1; border-radius: 6px; cursor: pointer; background: #f8fafc; font-weight: bold; }
+    .team-btn.selected { border-color: #15803d; background: #dcfce7; color: #166534; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid #e2e8f0; }
+    th { background: #f1f5f9; }
+    .status { padding: 0.5rem; border-radius: 4px; font-weight: bold; margin-top: 1rem; display: none; }
+    .success { background: #dcfce7; color: #166534; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+  <h1>🏈 College Football Pick'em</h1>
+
+  <!-- AUTH SECTION (Login / Sign Up) -->
+  <div id="authSection" class="card">
+    <h2 id="authTitle">Sign In</h2>
+    <label>Email:
+      <input type="email" id="authEmail" placeholder="you@example.com">
+    </label>
+    <label>Password:
+      <input type="password" id="authPassword" placeholder="******">
+    </label>
+    <label id="nameLabel" class="hidden">Display Name / Screen Name:
+      <input type="text" id="authName" placeholder="e.g. FootballFan99">
+    </label>
+    <button id="authPrimaryBtn">Sign In</button>
+    <p style="text-align:center; margin-top:1rem; font-size:0.9rem;">
+      <span id="toggleAuthText">Don't have an account?</span> 
+      <a href="#" id="toggleAuthLink" style="color:#1d4ed8; font-weight:bold;">Sign Up</a>
+    </p>
+  </div>
+
+  <!-- MAIN APP (Picks & Standings) -->
+  <div id="appSection" class="hidden">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+      <span>Logged in as: <strong id="userDisplay">...</strong></span>
+      <button id="logoutBtn" style="width:auto; margin-top:0; padding:0.4rem 0.8rem; background:#dc2626;">Log Out</button>
+    </div>
+
+    <!-- TAB NAVIGATION -->
+    <div class="nav-tabs">
+      <button id="tabPicksBtn" class="active">Make Picks</button>
+      <button id="tabStandingsBtn">Standings</button>
+    </div>
+
+    <!-- PICKS VIEW -->
+    <div id="viewPicks" class="card">
+      <h2>Submit Weekly Picks</h2>
+      <label>Select Week:
+        <select id="selectWeekPicks">
+          <option value="1">Week 1</option>
+          <option value="2">Week 2</option>
+          <option value="3">Week 3</option>
+          <option value="4">Week 4</option>
+          <option value="5">Week 5</option>
+        </select>
+      </label>
+
+      <div id="picksContainer" style="margin-top: 1.5rem;"></div>
+      <button id="savePicksBtn" style="background:#15803d; display:none;">Save My Picks</button>
+      <div id="pickStatus" class="status success">Picks saved successfully!</div>
+    </div>
+
+    <!-- STANDINGS VIEW -->
+    <div id="viewStandings" class="card hidden">
+      <h2>Leaderboard</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Player</th>
+            <th>Total Points</th>
+          </tr>
+        </thead>
+        <tbody id="standingsTableBody">
+          <tr><td colspan="3">Loading standings...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Firebase Modular SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getFirestore, collection, getDocs, query, where, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCcRR7c2g-RmJobHTGL2SQvPQ3FK08rA7k",
+      authDomain: "cfb-pickem-30d04.firebaseapp.com",
+      projectId: "cfb-pickem-30d04",
+      storageBucket: "cfb-pickem-30d04.firebasestorage.app",
+      messagingSenderId: "1083091699202",
+      appId: "1:1083091699202:web:c1681204595d756e84891b"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    let currentUser = null;
+    let isSignUpMode = false;
+    let selectedPicks = {};
+
+    // Auth Toggle State
+    document.getElementById('toggleAuthLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      isSignUpMode = !isSignUpMode;
+      document.getElementById('authTitle').innerText = isSignUpMode ? "Sign Up" : "Sign In";
+      document.getElementById('authPrimaryBtn').innerText = isSignUpMode ? "Create Account" : "Sign In";
+      document.getElementById('nameLabel').classList.toggle('hidden', !isSignUpMode);
+      document.getElementById('toggleAuthText').innerText = isSignUpMode ? "Already have an account?" : "Don't have an account?";
+      document.getElementById('toggleAuthLink').innerText = isSignUpMode ? "Sign In" : "Sign Up";
+    });
+
+    // Auth Action (Login / Signup)
+    document.getElementById('authPrimaryBtn').addEventListener('click', async () => {
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value;
+      const displayName = document.getElementById('authName').value.trim();
+
+      if (!email || !password) return alert("Please enter both email and password.");
+
+      try {
+        if (isSignUpMode) {
+          if (!displayName) return alert("Please enter a display name.");
+          const res = await createUserWithEmailAndPassword(auth, email, password);
+          await updateProfile(res.user, { displayName: displayName });
+          await setDoc(doc(db, "standings", res.user.uid), { userName: displayName, points: 0 });
+        } else {
+          await signInWithEmailAndPassword(auth, email, password);
+        }
+      } catch (err) {
+        alert("Auth Error: " + err.message);
+      }
+    });
+
+    // Listen to Auth State
+    onAuthStateChanged(auth, (user) => {
+      currentUser = user;
+      if (user) {
+        document.getElementById('authSection').classList.add('hidden');
+        document.getElementById('appSection').classList.remove('hidden');
+        document.getElementById('userDisplay').innerText = user.displayName || user.email;
+        loadPicksForWeek(1);
+      } else {
+        document.getElementById('authSection').classList.remove('hidden');
+        document.getElementById('appSection').classList.add('hidden');
+      }
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth));
+
+    // Tab Navigation
+    document.getElementById('tabPicksBtn').addEventListener('click', () => {
+      document.getElementById('tabPicksBtn').classList.add('active');
+      document.getElementById('tabStandingsBtn').classList.remove('active');
+      document.getElementById('viewPicks').classList.remove('hidden');
+      document.getElementById('viewStandings').classList.add('hidden');
+    });
+
+    document.getElementById('tabStandingsBtn').addEventListener('click', () => {
+      document.getElementById('tabStandingsBtn').classList.add('active');
+      document.getElementById('tabPicksBtn').classList.remove('active');
+      document.getElementById('viewStandings').classList.remove('hidden');
+      document.getElementById('viewPicks').classList.add('hidden');
+      loadStandings();
+    });
+
+    // Load Games & Existing Picks
+    document.getElementById('selectWeekPicks').addEventListener('change', (e) => {
+      loadPicksForWeek(parseInt(e.target.value));
+    });
+
+    async function loadPicksForWeek(week) {
+      const container = document.getElementById('picksContainer');
+      container.innerHTML = '<p>Loading games...</p>';
+      selectedPicks = {};
+
+      const gamesQ = query(collection(db, "games"), where("week", "==", week));
+      const gamesSnap = await getDocs(gamesQ);
+
+      if (gamesSnap.empty) {
+        container.innerHTML = '<p>No games added for this week yet.</p>';
+        document.getElementById('savePicksBtn').style.display = 'none';
+        return;
+      }
+
+      // Load User's Saved Picks for this week
+      const picksQ = query(collection(db, "picks"), where("userId", "==", currentUser.uid), where("week", "==", week));
+      const picksSnap = await getDocs(picksQ);
+      picksSnap.forEach(p => {
+        selectedPicks[p.data().gameId] = p.data().selectedTeam;
+      });
+
+      container.innerHTML = '';
+      gamesSnap.forEach((gameDoc) => {
+        const game = gameDoc.data();
+        const gameId = gameDoc.id;
+        const div = document.createElement('div');
+        div.className = 'game-card';
+
+        const userPick = selectedPicks[gameId] || null;
+
+        div.innerHTML = `
+          <div style="font-size:0.9rem; color:#64748b; margin-bottom:0.4rem;">Game ${gameId.slice(0,4)}</div>
+          <div class="team-options">
+            <div class="team-btn ${userPick === game.awayTeam ? 'selected' : ''}" onclick="window.selectTeam('${gameId}', '${game.awayTeam}', this)">
+              ${game.awayTeam}
+            </div>
+            <div class="team-btn ${userPick === game.homeTeam ? 'selected' : ''}" onclick="window.selectTeam('${gameId}', '${game.homeTeam}', this)">
+              ${game.homeTeam}
+            </div>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+
+      document.getElementById('savePicksBtn').style.display = 'block';
+    }
+
+    // Pick selection UI handling
+    window.selectTeam = (gameId, teamName, element) => {
+      const parent = element.parentElement;
+      parent.querySelectorAll('.team-btn').forEach(btn => btn.classList.remove('selected'));
+      element.classList.add('selected');
+      selectedPicks[gameId] = teamName;
+    };
+
+    // Save Picks
+    document.getElementById('savePicksBtn').addEventListener('click', async () => {
+      const week = parseInt(document.getElementById('selectWeekPicks').value);
+
+      for (const [gameId, selectedTeam] of Object.entries(selectedPicks)) {
+        const pickId = `${currentUser.uid}_${gameId}`;
+        await setDoc(doc(db, "picks", pickId), {
+          userId: currentUser.uid,
+          userName: currentUser.displayName || currentUser.email,
+          gameId: gameId,
+          week: week,
+          selectedTeam: selectedTeam
+        });
+      }
+
+      const el = document.getElementById('pickStatus');
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 3000);
+    });
+
+    // Load Standings
+    async function loadStandings() {
+      const tbody = document.getElementById('standingsTableBody');
+      tbody.innerHTML = '<tr><td colspan="3">Loading leaderboard...</td></tr>';
+
+      const snap = await getDocs(collection(db, "standings"));
+      if (snap.empty) {
+        tbody.innerHTML = '<tr><td colspan="3">No standings registered yet.</td></tr>';
+        return;
+      }
+
+      const standings = [];
+      snap.forEach(d => standings.push(d.data()));
+
+      // Sort by points descending
+      standings.sort((a, b) => (b.points || 0) - (a.points || 0));
+
+      tbody.innerHTML = '';
+      standings.forEach((user, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>#${idx + 1}</strong></td>
+          <td>${user.userName || 'Anonymous'}</td>
+          <td><strong>${user.points || 0} pts</strong></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+  </script>
+</body>
+</html>
