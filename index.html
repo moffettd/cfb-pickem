@@ -248,21 +248,24 @@
         selectedPicks[p.data().gameId] = p.data().selectedTeam;
       });
 
-      container.innerHTML = '';
-      gamesSnap.forEach((gameDoc) => {
-        const game = gameDoc.data();
-        const gameId = gameDoc.id;
-        const div = document.createElement('div');
-        div.className = 'game-card';
+container.innerHTML = '';
+let gameIndex = 1;
 
-        const userPick = selectedPicks[gameId] || null;
-        const lockClass = isWeekLocked ? 'disabled' : '';
+gamesSnap.forEach((gameDoc) => {
+  const game = gameDoc.data();
+  const gameId = gameDoc.id;
+  const div = document.createElement('div');
+  div.className = 'game-card';
 
-        div.innerHTML = `
-          <div style="font-size:0.85rem; color:#64748b; margin-bottom:0.4rem; display:flex; justify-content:space-between;">
-            <span>Game #${gameId.slice(0,4)}</span>
-            ${game.winner ? `<span style="color:#15803d; font-weight:bold;">Winner: ${game.winner}</span>` : ''}
-          </div>
+  const userPick = selectedPicks[gameId] || null;
+  const lockClass = isWeekLocked ? 'disabled' : '';
+
+  div.innerHTML = `
+    <div style="font-size:0.85rem; color:#64748b; margin-bottom:0.4rem; display:flex; justify-content:space-between;">
+      <span>Game #${gameIndex++}</span>
+      ${game.winner ? `<span style="color:#15803d; font-weight:bold;">Winner: ${game.winner}</span>` : ''}
+    </div>
+    
           <div class="team-options">
             <div class="team-btn ${userPick === game.awayTeam ? 'selected' : ''} ${lockClass}" 
                  onclick="window.selectTeam('${gameId}', '${game.awayTeam}', this)">
