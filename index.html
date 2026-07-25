@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CFB Weekly Pick'em</title>
-  <style>
+<style>
     body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; background: #f4f4f9; color: #333; }
     .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 1.5rem; }
     h1, h2 { color: #1e3a8a; margin-top: 0; }
@@ -16,9 +16,59 @@
     .nav-tabs button.active { background: #1e3a8a; color: white; }
     .game-card { border: 1px solid #e2e8f0; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
     .team-options { display: flex; gap: 1rem; margin-top: 0.5rem; }
-    .team-btn { flex: 1; padding: 0.75rem; text-align: center; border: 2px solid #cbd5e1; border-radius: 6px; cursor: pointer; background: #f8fafc; font-weight: bold; }
-    .team-btn.selected { border-color: #15803d; background: #dcfce7; color: #166534; }
+    
+    /* TEAM BUTTONS WITH WATERMARK LOGOS */
+    .team-btn { 
+      flex: 1; 
+      padding: 1rem 0.5rem; 
+      text-align: center; 
+      border: 2px solid #cbd5e1; 
+      border-radius: 8px; 
+      cursor: pointer; 
+      background-color: #ffffff; 
+      font-weight: bold; 
+      font-size: 1rem;
+      position: relative;
+      overflow: hidden;
+      z-index: 1;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 55px;
+    }
+
+    .team-btn::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image: var(--logo-url);
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: contain;
+      opacity: 0.15;
+      z-index: -1;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .team-btn:hover::before {
+      opacity: 0.25;
+      transform: scale(1.05);
+    }
+
+    .team-btn.selected { 
+      border-color: #15803d; 
+      background-color: #f0fdf4; 
+      color: #166534; 
+      box-shadow: 0 0 8px rgba(21, 128, 61, 0.2);
+    }
+
+    .team-btn.selected::before {
+      opacity: 0.35;
+    }
+
     .team-btn.disabled { cursor: not-allowed; opacity: 0.8; }
+    
     table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
     th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid #e2e8f0; }
     th { background: #f1f5f9; }
