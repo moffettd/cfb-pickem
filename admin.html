@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CFB Pick'em - Admin Console</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; background: #f4f4f9; color: #333; }
+    .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 1.5rem; }
+    h1, h2 { color: #1e3a8a; }
+    input, select, button { display: block; width: 100%; padding: 0.75rem; margin-top: 0.5rem; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    button { background: #1e3a8a; color: white; font-weight: bold; border: none; cursor: pointer; margin-top: 1rem; }
+    button:hover { background: #1d4ed8; }
+    .game-row { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #eee; padding: 0.75rem 0; }
+    .status { padding: 0.5rem; border-radius: 4px; font-weight: bold; margin-top: 1rem; display: none; }
+    .success { background: #dcfce7; color: #166534; }
+  </style>
+</head>
+<body>
+
+  <h1>🏈 Admin Panel: Game Management</h1>
+
+  <!-- ADD GAME FORM -->
+  <div class="card">
+    <h2>Add New Game</h2>
+    <label>Week Number:
+      <input type="number" id="weekNum" value="1" min="1" max="15">
+    </label>
+    <label>Away Team:
+      <input type="text" id="awayTeam" placeholder="e.g. Alabama">
+    </label>
+    <label>Home Team:
+      <input type="text" id="homeTeam" placeholder="e.g. Georgia">
+    </label>
+    <button id="addGameBtn">Add Game to Schedule</button>
+    <div id="addStatus" class="status success">Game added successfully!</div>
+  </div>
+
+  <!-- MANAGE WEEK / SET WINNERS -->
+  <div class="card">
+    <h2>Select Winners & Calculate Scores</h2>
+    <label>Select Week to Manage:
+      <select id="selectWeek">
+        <option value="1">Week 1</option>
+        <option value="2">Week 2</option>
+        <option value="3">Week 3</option>
+        <option value="4">Week 4</option>
+        <option value="5">Week 5</option>
+      </select>
+    </label>
+    <button id="loadGamesBtn">Load Games</button>
+
+    <div id="gamesList" style="margin-top: 1.5rem;"></div>
+    <button id="calculateScoresBtn" style="display:none; background: #15803d;">Save Winners & Calculate Standings</button>
+    <div id="calcStatus" class="status success">Scores calculated and standings updated!</div>
+  </div>
+
+  <!-- Firebase Modular SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, query, where, doc, updateDoc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // Your Firebase Config Options
+    const firebaseConfig = {
+      apiKey: "AIzaSyCcRR7c2g-RmJobHTGL2SQvPQ3FK08rA7k",
+      authDomain: "cfb-pickem-30d04.firebaseapp.com",
+      projectId: "cfb-pickem-30d04",
+      storageBucket: "cfb-pickem-30d04.firebasestorage.app",
+      messagingSenderId: "1083091699202",
+      appId: "1:1083091699202:web:c1681204595d756e84891b"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Add Game Function
+    document.getElementById('addGameBtn').addEventListener('click', async () => {
+      const week = parseInt(document.getElementById('weekNum').value);
+      const away = document.getElementById('awayTeam').value.trim();
+      const home = document.getElementById('homeTeam').value.trim();
+
+      if (!away || !home) return alert('Please enter both team names.');
+
+      try {
+        await addDoc(collection(db, "games"), {
+          week: week,
+          awayTeam: away,
+          homeTeam: home,
+          winner: null
+        });
+        document.getElementById('awayTeam').value = '';
+        document.getElementById('homeTeam').value = '';
+        showStatus('addStatus');
+      } catch (err) {
+        alert("Error adding game: " + err.message);
+      }
+    });
+
+    // Load Games for Selected Week
+    document.getElementById('loadGamesBtn').addEventListener('click', async () => {
+      const week = parseInt(document.getElementById('selectWeek').value);
+      const gamesList = document.getElementById('gamesList');
+      gamesList.innerHTML = '<p>Loading games...</p>';
+
+      const q = query(collection(db, "games"), where("week", "==", week));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        gamesList.innerHTML = '<p>No games added for this week yet.</p>';
+        document.getElementById('calculateScoresBtn').style.display = 'none';
+        return;
+      }
+
+      gamesList.innerHTML = '';
+      querySnapshot.forEach((gameDoc) => {
+        const game = gameDoc.data();
+        const div = document.createElement('div');
+        div.className = 'game-row';
+        div.innerHTML = `
+          <span><strong>${game.awayTeam}</strong> @ <strong>${game.homeTeam}</strong></span>
+          <select class="winner-select" data-game-id="${gameDoc.id}">
+            <option value="">-- Select Winner --</option>
+            <option value="${game.awayTeam}" ${game.winner === game.awayTeam ? 'selected' : ''}>${game.awayTeam}</option>
+            <option value="${game.homeTeam}" ${game.winner === game.homeTeam ? 'selected' : ''}>${game.homeTeam}</option>
+          </select>
+        `;
+        gamesList.appendChild(div);
+      });
+
+      document.getElementById('calculateScoresBtn').style.display = 'block';
+    });
+
+    // Calculate Scores & Update Standings
+    document.getElementById('calculateScoresBtn').addEventListener('click', async () => {
+      const selects = document.querySelectorAll('.winner-select');
+      const gameWinners = {};
+
+      for (const select of selects) {
+        const gameId = select.dataset.gameId;
+        const winner = select.value;
+        if (winner) {
+          gameWinners[gameId] = winner;
+          await updateDoc(doc(db, "games", gameId), { winner: winner });
+        }
+      }
+
+      const picksSnapshot = await getDocs(collection(db, "picks"));
+      const userScores = {};
+
+      picksSnapshot.forEach((pickDoc) => {
+        const pickData = pickDoc.data();
+        if (gameWinners[pickData.gameId] && gameWinners[pickData.gameId] === pickData.selectedTeam) {
+          userScores[pickData.userId] = (userScores[pickData.userId] || 0) + 1;
+        }
+      });
+
+      for (const [userId, score] of Object.entries(userScores)) {
+        const userRef = doc(db, "standings", userId);
+        const userDoc = await getDoc(userRef);
+        const currentPoints = userDoc.exists() ? (userDoc.data().points || 0) : 0;
+        
+        await setDoc(userRef, {
+          userName: userDoc.exists() ? userDoc.data().userName : "User " + userId.slice(0, 4),
+          points: currentPoints + score
+        }, { merge: true });
+      }
+
+      showStatus('calcStatus');
+    });
+
+    function showStatus(id) {
+      const el = document.getElementById(id);
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 3000);
+    }
+  </script>
+</body>
+</html>
