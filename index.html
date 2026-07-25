@@ -18,11 +18,13 @@
     .team-options { display: flex; gap: 1rem; margin-top: 0.5rem; }
     .team-btn { flex: 1; padding: 0.75rem; text-align: center; border: 2px solid #cbd5e1; border-radius: 6px; cursor: pointer; background: #f8fafc; font-weight: bold; }
     .team-btn.selected { border-color: #15803d; background: #dcfce7; color: #166534; }
+    .team-btn.disabled { cursor: not-allowed; opacity: 0.8; }
     table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
     th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid #e2e8f0; }
     th { background: #f1f5f9; }
-    .status { padding: 0.5rem; border-radius: 4px; font-weight: bold; margin-top: 1rem; display: none; }
+    .status { padding: 0.75rem; border-radius: 4px; font-weight: bold; margin-top: 1rem; display: none; }
     .success { background: #dcfce7; color: #166534; }
+    .locked-banner { background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; padding: 0.75rem; border-radius: 6px; font-weight: bold; margin-bottom: 1rem; text-align: center; }
     .hidden { display: none; }
   </style>
 </head>
@@ -30,7 +32,7 @@
 
   <h1>🏈 College Football Pick'em</h1>
 
-  <!-- AUTH SECTION (Login / Sign Up) -->
+  <!-- AUTH SECTION -->
   <div id="authSection" class="card">
     <h2 id="authTitle">Sign In</h2>
     <label>Email:
@@ -49,14 +51,14 @@
     </p>
   </div>
 
-  <!-- MAIN APP (Picks & Standings) -->
+  <!-- MAIN APP -->
   <div id="appSection" class="hidden">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
       <span>Logged in as: <strong id="userDisplay">...</strong></span>
       <button id="logoutBtn" style="width:auto; margin-top:0; padding:0.4rem 0.8rem; background:#dc2626;">Log Out</button>
     </div>
 
-    <!-- TAB NAVIGATION -->
+    <!-- TABS -->
     <div class="nav-tabs">
       <button id="tabPicksBtn" class="active">Make Picks</button>
       <button id="tabStandingsBtn">Standings</button>
@@ -64,7 +66,7 @@
 
     <!-- PICKS VIEW -->
     <div id="viewPicks" class="card">
-      <h2>Submit Weekly Picks</h2>
+      <h2>Weekly Picks</h2>
       <label>Select Week:
         <select id="selectWeekPicks">
           <option value="1">Week 1</option>
@@ -72,10 +74,24 @@
           <option value="3">Week 3</option>
           <option value="4">Week 4</option>
           <option value="5">Week 5</option>
+          <option value="6">Week 6</option>
+          <option value="7">Week 7</option>
+          <option value="8">Week 8</option>
+          <option value="9">Week 9</option>
+          <option value="10">Week 10</option>
+          <option value="11">Week 11</option>
+          <option value="12">Week 12</option>
+          <option value="13">Week 13</option>
+          <option value="14">Week 14</option>
+          <option value="15">Week 15</option>
         </select>
       </label>
 
-      <div id="picksContainer" style="margin-top: 1.5rem;"></div>
+      <div id="lockNotice" class="hidden locked-banner" style="margin-top: 1rem;">
+        🔒 Picks for this week are locked (Deadline: Saturday at 12:00 PM EST).
+      </div>
+
+      <div id="picksContainer" style="margin-top: 1rem;"></div>
       <button id="savePicksBtn" style="background:#15803d; display:none;">Save My Picks</button>
       <div id="pickStatus" class="status success">Picks saved successfully!</div>
     </div>
@@ -98,11 +114,11 @@
     </div>
   </div>
 
-  <!-- Firebase Modular SDK -->
+  <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getFirestore, collection, getDocs, query, where, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, collection, getDocs, query, where, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCcRR7c2g-RmJobHTGL2SQvPQ3FK08rA7k",
@@ -120,8 +136,9 @@
     let currentUser = null;
     let isSignUpMode = false;
     let selectedPicks = {};
+    let isWeekLocked = false;
 
-    // Auth Toggle State
+    // Toggle Sign In / Up
     document.getElementById('toggleAuthLink').addEventListener('click', (e) => {
       e.preventDefault();
       isSignUpMode = !isSignUpMode;
@@ -132,7 +149,7 @@
       document.getElementById('toggleAuthLink').innerText = isSignUpMode ? "Sign In" : "Sign Up";
     });
 
-    // Auth Action (Login / Signup)
+    // Auth Actions
     document.getElementById('authPrimaryBtn').addEventListener('click', async () => {
       const email = document.getElementById('authEmail').value.trim();
       const password = document.getElementById('authPassword').value;
@@ -154,7 +171,7 @@
       }
     });
 
-    // Listen to Auth State
+    // Auth Observer
     onAuthStateChanged(auth, (user) => {
       currentUser = user;
       if (user) {
@@ -186,15 +203,34 @@
       loadStandings();
     });
 
-    // Load Games & Existing Picks
     document.getElementById('selectWeekPicks').addEventListener('change', (e) => {
       loadPicksForWeek(parseInt(e.target.value));
     });
+
+    // Check if the current time is past Saturday 12:00 PM EST for the selected week
+    function checkIsLocked(week) {
+      // Set Week 1 Saturday 12:00 PM EST baseline (Labor Day weekend Saturday: August 29, 2026 12:00:00 EST)
+      // Each subsequent week adds 7 days.
+      const baseWeek1Saturday = new Date('2026-08-29T12:00:00-04:00');
+      const targetDeadline = new Date(baseWeek1Saturday.getTime() + (week - 1) * 7 * 24 * 60 * 60 * 1000);
+      
+      const now = new Date();
+      return now > targetDeadline;
+    }
 
     async function loadPicksForWeek(week) {
       const container = document.getElementById('picksContainer');
       container.innerHTML = '<p>Loading games...</p>';
       selectedPicks = {};
+
+      isWeekLocked = checkIsLocked(week);
+
+      const lockNotice = document.getElementById('lockNotice');
+      if (isWeekLocked) {
+        lockNotice.classList.remove('hidden');
+      } else {
+        lockNotice.classList.add('hidden');
+      }
 
       const gamesQ = query(collection(db, "games"), where("week", "==", week));
       const gamesSnap = await getDocs(gamesQ);
@@ -205,7 +241,7 @@
         return;
       }
 
-      // Load User's Saved Picks for this week
+      // Load Saved Picks
       const picksQ = query(collection(db, "picks"), where("userId", "==", currentUser.uid), where("week", "==", week));
       const picksSnap = await getDocs(picksQ);
       picksSnap.forEach(p => {
@@ -220,14 +256,20 @@
         div.className = 'game-card';
 
         const userPick = selectedPicks[gameId] || null;
+        const lockClass = isWeekLocked ? 'disabled' : '';
 
         div.innerHTML = `
-          <div style="font-size:0.9rem; color:#64748b; margin-bottom:0.4rem;">Game ${gameId.slice(0,4)}</div>
+          <div style="font-size:0.85rem; color:#64748b; margin-bottom:0.4rem; display:flex; justify-content:space-between;">
+            <span>Game #${gameId.slice(0,4)}</span>
+            ${game.winner ? `<span style="color:#15803d; font-weight:bold;">Winner: ${game.winner}</span>` : ''}
+          </div>
           <div class="team-options">
-            <div class="team-btn ${userPick === game.awayTeam ? 'selected' : ''}" onclick="window.selectTeam('${gameId}', '${game.awayTeam}', this)">
+            <div class="team-btn ${userPick === game.awayTeam ? 'selected' : ''} ${lockClass}" 
+                 onclick="window.selectTeam('${gameId}', '${game.awayTeam}', this)">
               ${game.awayTeam}
             </div>
-            <div class="team-btn ${userPick === game.homeTeam ? 'selected' : ''}" onclick="window.selectTeam('${gameId}', '${game.homeTeam}', this)">
+            <div class="team-btn ${userPick === game.homeTeam ? 'selected' : ''} ${lockClass}" 
+                 onclick="window.selectTeam('${gameId}', '${game.homeTeam}', this)">
               ${game.homeTeam}
             </div>
           </div>
@@ -235,11 +277,12 @@
         container.appendChild(div);
       });
 
-      document.getElementById('savePicksBtn').style.display = 'block';
+      document.getElementById('savePicksBtn').style.display = isWeekLocked ? 'none' : 'block';
     }
 
-    // Pick selection UI handling
+    // Handle button clicks (blocked if locked)
     window.selectTeam = (gameId, teamName, element) => {
+      if (isWeekLocked) return; // Prevent selection if locked
       const parent = element.parentElement;
       parent.querySelectorAll('.team-btn').forEach(btn => btn.classList.remove('selected'));
       element.classList.add('selected');
@@ -248,6 +291,8 @@
 
     // Save Picks
     document.getElementById('savePicksBtn').addEventListener('click', async () => {
+      if (isWeekLocked) return alert("Picks for this week are locked.");
+
       const week = parseInt(document.getElementById('selectWeekPicks').value);
 
       for (const [gameId, selectedTeam] of Object.entries(selectedPicks)) {
@@ -266,7 +311,7 @@
       setTimeout(() => { el.style.display = 'none'; }, 3000);
     });
 
-    // Load Standings
+    // Standings
     async function loadStandings() {
       const tbody = document.getElementById('standingsTableBody');
       tbody.innerHTML = '<tr><td colspan="3">Loading leaderboard...</td></tr>';
@@ -279,8 +324,6 @@
 
       const standings = [];
       snap.forEach(d => standings.push(d.data()));
-
-      // Sort by points descending
       standings.sort((a, b) => (b.points || 0) - (a.points || 0));
 
       tbody.innerHTML = '';
