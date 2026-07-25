@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CFB Weekly Pick'em</title>
-<style>
+  <style>
     body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; background: #f4f4f9; color: #333; }
     .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 1.5rem; }
     h1, h2 { color: #1e3a8a; margin-top: 0; }
@@ -46,13 +46,13 @@
       background-repeat: no-repeat;
       background-position: center;
       background-size: contain;
-      opacity: 0.15;
+      opacity: 0.18;
       z-index: -1;
       transition: opacity 0.2s ease, transform 0.2s ease;
     }
 
     .team-btn:hover::before {
-      opacity: 0.25;
+      opacity: 0.30;
       transform: scale(1.05);
     }
 
@@ -64,7 +64,7 @@
     }
 
     .team-btn.selected::before {
-      opacity: 0.35;
+      opacity: 0.40;
     }
 
     .team-btn.disabled { cursor: not-allowed; opacity: 0.8; }
@@ -188,6 +188,31 @@
     let selectedPicks = {};
     let isWeekLocked = false;
 
+    // Helper to fetch team logos from ESPN CDN
+    function getTeamLogoUrl(teamName) {
+      if (!teamName) return '';
+      const clean = teamName.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      
+      const logoMap = {
+        'alabama': '333', 'georgia': '61', 'ohiostate': '194', 'michigan': '130',
+        'texas': '251', 'oregon': '2483', 'pennstate': '213', 'notredame': '87',
+        'lsu': '99', 'tennessee': '2633', 'clemson': '228', 'floridastate': '52',
+        'florida': '57', 'oklahoma': '201', 'usc': '30', 'auburn': '2',
+        'wisconsin': '275', 'miami': '2390', 'tam': '245', 'texasam': '245',
+        'olemiss': '145', 'mississippistate': '344', 'iowa': '2294', 'iowastate': '66',
+        'kansas': '2305', 'kansasstate': '2306', 'oklahomastate': '197', 'utah': '254',
+        'colorado': '38', 'ucla': '26', 'washington': '264', 'kentucky': '96',
+        'louisville': '97', 'ncstate': '152', 'unc': '153', 'southcarolina': '2579',
+        'arkansas': '8', 'missouri': '142', 'tamu': '245'
+      };
+
+      const id = logoMap[clean];
+      if (id) {
+        return `url('https://a.espncdn.com/i/teamlogos/ncaa/500/${id}.png')`;
+      }
+      return `url('https://a.espncdn.com/i/teamlogos/ncaa/500-dark/sb.png')`;
+    }
+
     // Toggle Sign In / Up
     document.getElementById('toggleAuthLink').addEventListener('click', (e) => {
       e.preventDefault();
@@ -257,13 +282,10 @@
       loadPicksForWeek(parseInt(e.target.value));
     });
 
-    // Check if the current time is past Saturday 12:00 PM EST for the selected week
+    // Check if locked
     function checkIsLocked(week) {
-      // Set Week 1 Saturday 12:00 PM EST baseline (Labor Day weekend Saturday: August 29, 2026 12:00:00 EST)
-      // Each subsequent week adds 7 days.
       const baseWeek1Saturday = new Date('2026-08-29T12:00:00-04:00');
       const targetDeadline = new Date(baseWeek1Saturday.getTime() + (week - 1) * 7 * 24 * 60 * 60 * 1000);
-      
       const now = new Date();
       return now > targetDeadline;
     }
@@ -298,32 +320,33 @@
         selectedPicks[p.data().gameId] = p.data().selectedTeam;
       });
 
-container.innerHTML = '';
-let gameIndex = 1;
+      container.innerHTML = '';
+      let gameIndex = 1;
 
-gamesSnap.forEach((gameDoc) => {
-  const game = gameDoc.data();
-  const gameId = gameDoc.id;
-  const div = document.createElement('div');
-  div.className = 'game-card';
+      gamesSnap.forEach((gameDoc) => {
+        const game = gameDoc.data();
+        const gameId = gameDoc.id;
+        const div = document.createElement('div');
+        div.className = 'game-card';
 
-  const userPick = selectedPicks[gameId] || null;
-  const lockClass = isWeekLocked ? 'disabled' : '';
+        const userPick = selectedPicks[gameId] || null;
+        const lockClass = isWeekLocked ? 'disabled' : '';
 
-  div.innerHTML = `
-    <div style="font-size:0.85rem; color:#64748b; margin-bottom:0.4rem; display:flex; justify-content:space-between;">
-      <span>Game #${gameIndex++}</span>
-      ${game.winner ? `<span style="color:#15803d; font-weight:bold;">Winner: ${game.winner}</span>` : ''}
-    </div>
-    
+        div.innerHTML = `
+          <div style="font-size:0.85rem; color:#64748b; margin-bottom:0.4rem; display:flex; justify-content:space-between;">
+            <span>Game #${gameIndex++}</span>
+            ${game.winner ? `<span style="color:#15803d; font-weight:bold;">Winner: ${game.winner}</span>` : ''}
+          </div>
           <div class="team-options">
             <div class="team-btn ${userPick === game.awayTeam ? 'selected' : ''} ${lockClass}" 
+                 style="--logo-url: ${getTeamLogoUrl(game.awayTeam)}"
                  onclick="window.selectTeam('${gameId}', '${game.awayTeam}', this)">
-              ${game.awayTeam}
+              <span>${game.awayTeam}</span>
             </div>
             <div class="team-btn ${userPick === game.homeTeam ? 'selected' : ''} ${lockClass}" 
+                 style="--logo-url: ${getTeamLogoUrl(game.homeTeam)}"
                  onclick="window.selectTeam('${gameId}', '${game.homeTeam}', this)">
-              ${game.homeTeam}
+              <span>${game.homeTeam}</span>
             </div>
           </div>
         `;
@@ -333,9 +356,9 @@ gamesSnap.forEach((gameDoc) => {
       document.getElementById('savePicksBtn').style.display = isWeekLocked ? 'none' : 'block';
     }
 
-    // Handle button clicks (blocked if locked)
+    // Handle selection
     window.selectTeam = (gameId, teamName, element) => {
-      if (isWeekLocked) return; // Prevent selection if locked
+      if (isWeekLocked) return;
       const parent = element.parentElement;
       parent.querySelectorAll('.team-btn').forEach(btn => btn.classList.remove('selected'));
       element.classList.add('selected');
